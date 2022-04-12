@@ -1,0 +1,21 @@
+{
+  "name": "newageerp/sf-export",
+  "type": "symfony-bundle",
+  "autoload": {
+    "psr-4": {
+      "Newageerp\\SfExport\\": ""
+    }
+  },
+  "require": {
+    "newageerp/sf-uservice": "^0",
+    "newageerp/sf-auth": "^0",
+    "phpoffice/phpspreadsheet": "^1.18"
+  },
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Arturas Jegorenkovas",
+      "email": "info@newageerp.com"
+    }
+  ]
+}
