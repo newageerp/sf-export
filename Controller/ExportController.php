@@ -139,7 +139,7 @@ class ExportController extends UControllerBase
                         [$schema, $fieldKey] = $pathArray;
                     }
 
-                    $val = $relName ?
+                    $val = $relName && isset($item[$fieldKey]) && $item[$fieldKey] ?
                         $item[$fieldKey][$relName] :
                         $item[$fieldKey];
 
