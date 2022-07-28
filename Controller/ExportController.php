@@ -39,7 +39,8 @@ class ExportController extends UControllerBase
     /**
      * OaListController constructor.
      */
-    public function __construct(EntityManagerInterface $em, EventDispatcherInterface $eventDispatcher) {
+    public function __construct(EntityManagerInterface $em, EventDispatcherInterface $eventDispatcher)
+    {
         parent::__construct($em, $eventDispatcher);
         $this->letters = ['', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'X', 'Y', 'Z'];
     }
@@ -66,6 +67,7 @@ class ExportController extends UControllerBase
             $title = $request->get('title');
             $exportOptions = $request->get('exportOptions');
             $fields = $request->get('fields');
+            $columns = $request->get('columns');
 
             $fieldsToReturn = $exportOptions['fieldsToReturn'] ?? ['id'];
 
@@ -93,14 +95,28 @@ class ExportController extends UControllerBase
 
             $this->applyStyleToRow($sheet, 3, $this->headerStyle);
 
+            $parseColumns = $columns ?: array_map(function ($field) use ($schema) {
+                $field['path'] = isset($field['relName']) ?
+                    $schema . '.' . $field['key'] . '.' . $field['relName'] :
+                    $schema . '.' . $field['key'];
+                return $field;
+            }, $fields);
+
             $col = 1;
-            foreach ($fields as $field) {
-                $fieldKey = $field['key'];
+
+            foreach ($parseColumns as $field) {
+                $pathArray = explode(".", $field['path']);
+                $relName = null;
+                if (count($pathArray) === 3) {
+                    [$schema, $fieldKey, $relName] = $pathArray;
+                } else {
+                    [$schema, $fieldKey] = $pathArray;
+                }
 
                 $sheet->setCellValue($this->letters[$col] . '3', $properties[$fieldKey]['title']);
 
                 if (isset($field['allowEdit'])) {
-                    $sheet->setCellValue($this->letters[$col] . '2', $field['key']);
+                    $sheet->setCellValue($this->letters[$col] . '2', $fieldKey);
 
                     $sheet
                         ->getStyle($this->letters[$col] . '2:' . $this->letters[$col] . ($recordsCount + 3))
@@ -114,12 +130,18 @@ class ExportController extends UControllerBase
             $row = 4;
             foreach ($data as $item) {
                 $col = 1;
-                foreach ($fields as $field) {
-                    $fieldKey = $field['key'];
+                foreach ($parseColumns as $field) {
+                    $pathArray = explode(".", $field['path']);
+                    $relName = null;
+                    if (count($pathArray) === 3) {
+                        [$schema, $fieldKey, $relName] = $pathArray;
+                    } else {
+                        [$schema, $fieldKey] = $pathArray;
+                    }
 
-                    $val = isset($field['relName']) ?
-                        $item[$field['key']][$field['relName']] :
-                        $item[$field['key']];
+                    $val = $relName ?
+                        $item[$fieldKey][$relName] :
+                        $item[$fieldKey];
 
                     if (isset($properties[$fieldKey]['enum']) && $properties[$fieldKey]['enum']) {
                         foreach ($properties[$fieldKey]['enum'] as $p) {
