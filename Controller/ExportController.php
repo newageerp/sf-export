@@ -113,7 +113,8 @@ class ExportController extends UControllerBase
                     [$schema, $fieldKey] = $pathArray;
                 }
 
-                $sheet->setCellValue($this->letters[$col] . '3', $properties[$fieldKey]['title']);
+                $title = isset($field['customTitle']) && $field['customTitle']?$field['customTitle']:$properties[$fieldKey]['title'];
+                $sheet->setCellValue($this->letters[$col] . '3', $title);
 
                 if (isset($field['allowEdit'])) {
                     $sheet->setCellValue($this->letters[$col] . '2', $fieldKey);
