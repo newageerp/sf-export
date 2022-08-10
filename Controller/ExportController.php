@@ -1,4 +1,6 @@
-<?php /** @noinspection PhpMultipleClassDeclarationsInspection */
+<?php
+
+/** @noinspection PhpMultipleClassDeclarationsInspection */
 
 namespace Newageerp\SfExport\Controller;
 
@@ -34,6 +36,11 @@ class ExportController extends UControllerBase
     protected function applyStyleToRow($sheet, int $row, array $style)
     {
         $sheet->getStyle('A' . $row . ':X' . $row)->applyFromArray($style);
+    }
+
+    protected function applyStyleToCell($sheet, string $cell, array $style)
+    {
+        $sheet->getStyle($cell)->applyFromArray($style);
     }
 
     /**
@@ -102,6 +109,29 @@ class ExportController extends UControllerBase
                 return $field;
             }, $fields);
 
+            $parseColumns = array_map(function ($field) use ($properties) {
+                $pathArray = explode(".", $field['path']);
+                $relName = null;
+                if (count($pathArray) === 3) {
+                    [$schema, $fieldKey, $relName] = $pathArray;
+                } else {
+                    [$schema, $fieldKey] = $pathArray;
+                }
+
+                $field['schema'] = $schema;
+                $field['fieldKey'] = $fieldKey;
+                $field['title'] = isset($field['customTitle']) && $field['customTitle'] ? $field['customTitle'] : $properties[$fieldKey]['title'];
+                $field['pivotTitle'] = isset($field['pivotCustomTitle']) ? $field['pivotCustomTitle'] : $field['title'];
+                return $field;
+            }, $parseColumns);
+
+            $hasPivot = false;
+            foreach ($parseColumns as $col) {
+                if (isset($col['pivotSetting']) && $col['pivotSetting']) {
+                    $hasPivot = true;
+                }
+            }
+
             $col = 1;
 
             foreach ($parseColumns as $field) {
@@ -113,7 +143,7 @@ class ExportController extends UControllerBase
                     [$schema, $fieldKey] = $pathArray;
                 }
 
-                $title = isset($field['customTitle']) && $field['customTitle']?$field['customTitle']:$properties[$fieldKey]['title'];
+                $title = $field['title'];
                 $sheet->setCellValue($this->letters[$col] . '3', $title);
 
                 if (isset($field['allowEdit'])) {
@@ -129,8 +159,11 @@ class ExportController extends UControllerBase
                 $col++;
             }
             $row = 4;
+            $pivotRow = 0;
+            $pivotData = [];
             foreach ($data as $item) {
                 $col = 1;
+                $pivotCol = 0;
                 foreach ($parseColumns as $field) {
                     $pathArray = explode(".", $field['path']);
                     $relName = null;
@@ -154,14 +187,127 @@ class ExportController extends UControllerBase
                     }
 
                     $sheet->getCellByColumnAndRow($col, $row)->setValue($val);
+
+                    if (!isset($pivotData[$pivotRow])) {
+                        $pivotData[$pivotRow] = [
+                            -1 => '-'
+                        ];
+                    }
+                    $pivotData[$pivotRow][$pivotCol] = $val;
+
                     $col++;
+                    $pivotCol++;
                 }
                 $row++;
+                $pivotRow++;
             }
 
             foreach ($this->letters as $letter) {
                 if ($letter) {
                     $sheet->getColumnDimension($letter)->setAutoSize(true);
+                }
+            }
+
+            if ($hasPivot) {
+                $pivotRowTitle = '';
+                $pivotColTitle = '';
+                $pivotTotalTitles = [];
+                $pivotTotalIndexes = [];
+                $pivotTotalTypes = [];
+                $pivotTotalsCount = count($pivotTotalTitles);
+
+                $pivotRowIndex = -1;
+                $pivotColIndex = -1;
+
+                $pivotSheet = $spreadsheet->createSheet(1);
+                $pivotSheet->setTitle('Ataskaita');
+
+                foreach ($parseColumns as $colIndex => $col) {
+                    if (isset($col['pivotSetting'])) {
+                        if ($col['pivotSetting'] === 'row') {
+                            $pivotRowTitle = $col['pivotTitle'];
+                            $pivotRowIndex = $colIndex;
+                        }
+                        if ($col['pivotSetting'] === 'col') {
+                            $pivotColTitle = $col['pivotTitle'];
+                            $pivotColIndex = $colIndex;
+                        }
+                        if ($col['pivotSetting'] === 'total' || $col['pivotSetting'] === 'count') {
+                            $pivotTotalTitles[] = $col['pivotTitle'];
+                            $pivotTotalIndexes[] = $colIndex;
+                            $pivotTotalTypes[] = $col['pivotSetting'];
+                        }
+                    }
+                }
+
+                $pivotSheet->getCellByColumnAndRow(1, 3)->setValue($pivotRowTitle);
+                $pivotSheet->getCellByColumnAndRow(2, 1)->setValue($pivotColTitle);
+
+                $this->applyStyleToRow($sheet, 2, $this->headerStyle);
+                $this->applyStyleToCell($sheet, 'A3', $this->headerStyle);
+
+
+                $pivotRowValues = array_values(
+                    array_unique(
+                        array_map(
+                            function ($item) use ($pivotRowIndex) {
+                                return $item[$pivotRowIndex];
+                            },
+                            $pivotData
+                        )
+                    )
+                );
+
+                $pivotColValues = array_values(
+                    array_unique(
+                        array_map(
+                            function ($item) use ($pivotColIndex) {
+                                return $item[$pivotColIndex];
+                            },
+                            $pivotData
+                        )
+                    )
+                );
+
+                foreach ($pivotRowValues as $rowIndex => $rowValue) {
+                    $pivotSheet->getCellByColumnAndRow(1, 4 + $rowIndex)->setValue($rowValue);
+                }
+                foreach ($pivotColValues as $colIndex => $colValue) {
+                    $pivotSheet->getCellByColumnAndRow(2 + ($colIndex * $pivotTotalsCount), 2)->setValue($colValue);
+                    foreach ($pivotTotalTitles as $totalIndex => $totalTitle) {
+                        $pivotSheet->getCellByColumnAndRow(2 + $totalIndex, 3)->setValue($totalTitle);
+                    }
+                }
+
+                foreach ($pivotRowValues as $rowIndex => $rowValue) {
+                    foreach ($pivotColValues as $colIndex => $colValue) {
+                        foreach ($pivotTotalTitles as $totalIndex => $totalTitle) {
+                            $colData = array_map(
+                                function ($item) use ($totalIndex, $pivotTotalIndexes) {
+                                    return $item[$pivotTotalIndexes[$totalIndex]];
+                                },
+                                array_filter(
+                                    $pivotData,
+                                    function ($item) use ($pivotRowIndex, $pivotColIndex, $rowValue, $colValue) {
+                                        return $item[$pivotRowIndex] === $rowValue && $item[$pivotColIndex] === $colValue;
+                                    }
+                                )
+                            );
+                            $val = 0;
+                            if ($pivotTotalTypes[$totalIndex] === 'count') {
+                                $val = count(array_unique($colData));
+                            } else if ($pivotTotalTypes[$totalIndex] === 'total') {
+                                $val = array_sum($colData);
+                            }
+                            $pivotSheet->getCellByColumnAndRow(2 + $totalIndex, 4 + $rowIndex)->setValue($val);
+                        }
+                    }
+                }
+
+                foreach ($this->letters as $letter) {
+                    if ($letter) {
+                        $pivotSheet->getColumnDimension($letter)->setAutoSize(true);
+                    }
                 }
             }
 
