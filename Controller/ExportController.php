@@ -214,7 +214,7 @@ class ExportController extends UControllerBase
                 $pivotTotalTitles = [];
                 $pivotTotalIndexes = [];
                 $pivotTotalTypes = [];
-                $pivotTotalsCount = count($pivotTotalTitles);
+                
 
                 $pivotRowIndex = -1;
                 $pivotColIndex = -1;
@@ -239,6 +239,7 @@ class ExportController extends UControllerBase
                         }
                     }
                 }
+                $pivotTotalsCount = count($pivotTotalTitles);
 
                 $pivotSheet->getCellByColumnAndRow(1, 3)->setValue($pivotRowTitle);
                 $pivotSheet->getCellByColumnAndRow(2, 1)->setValue($pivotColTitle);
@@ -275,7 +276,7 @@ class ExportController extends UControllerBase
                 foreach ($pivotColValues as $colIndex => $colValue) {
                     $pivotSheet->getCellByColumnAndRow(2 + ($colIndex * $pivotTotalsCount), 2)->setValue($colValue);
                     foreach ($pivotTotalTitles as $totalIndex => $totalTitle) {
-                        $pivotSheet->getCellByColumnAndRow(2 + $totalIndex, 3)->setValue($totalTitle);
+                        $pivotSheet->getCellByColumnAndRow(2 + ($colIndex * $pivotTotalsCount) + $totalIndex, 3)->setValue($totalTitle);
                     }
                 }
 
@@ -299,7 +300,7 @@ class ExportController extends UControllerBase
                             } else if ($pivotTotalTypes[$totalIndex] === 'total') {
                                 $val = array_sum($colData);
                             }
-                            $pivotSheet->getCellByColumnAndRow(2 + $totalIndex, 4 + $rowIndex)->setValue($val);
+                            $pivotSheet->getCellByColumnAndRow(2 + ($colIndex * $pivotTotalsCount) + $totalIndex, 4 + $rowIndex)->setValue($val);
                         }
                     }
                 }
