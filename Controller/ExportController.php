@@ -146,7 +146,7 @@ class ExportController extends UControllerBase
                 $title = $field['title'];
                 $sheet->setCellValue($this->letters[$col] . '3', $title);
 
-                if (isset($field['allowEdit'])) {
+                if (isset($field['allowEdit']) && $field['allowEdit']) {
                     $sheet->setCellValue($this->letters[$col] . '2', $fieldKey);
 
                     $sheet
